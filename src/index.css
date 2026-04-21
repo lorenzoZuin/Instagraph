@@ -1,0 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-insta-pink: #dc2743;
+  --color-insta-orange: #f09433;
+  --color-insta-purple: #bc1888;
+  --color-insta-red: #e6683c;
+}
+
+@layer base {
+  html {
+    font-size: 104%;
+  }
+
+  body {
+    @apply bg-slate-100 text-slate-800 font-sans antialiased;
+  }
+}
+
+.insta-gradient {
+  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+}
+
+.insta-gradient-text {
+  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.card {
+  @apply bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden;
+}
+
+.tab-active {
+  @apply border-b-2 border-insta-pink text-insta-pink font-semibold;
+}
+
+.bubble {
+  @apply rounded-full opacity-90 transition duration-150 cursor-pointer hover:brightness-75;
+}

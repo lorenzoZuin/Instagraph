@@ -1,0 +1,6 @@
+{
+  "name": "InstaReport - Análisis Mensual",
+  "description": "Reporte interactivo de estadísticas mensuales para cuentas de Instagram, con análisis de videos, engagement y comentarios.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
