@@ -774,7 +774,7 @@ const AccountTab = () => {
         <div className="relative">
           <div className="w-24 h-24 rounded-full p-0.5 instagram-gradient shadow-lg">
             <img 
-              src="/public/profile.jpg" 
+              src="/profile.jpg" 
               alt="Profile" 
               className="w-full h-full rounded-full object-cover ring-2 ring-white"
               referrerPolicy="no-referrer"
@@ -901,7 +901,7 @@ export default function App() {
             Abril 2026
           </div>
           <div className="w-11 h-11 rounded-full border border-slate-200 overflow-hidden ring-2 ring-white shadow-sm">
-            <img src="/public/profile.jpg" alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            <img src="/profile.jpg" alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           </div>
         </div>
       </header>
