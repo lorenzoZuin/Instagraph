@@ -313,6 +313,9 @@ const ACCOUNT_STATS = {
   viral_threshold: 400000
 };
 
+const profileImageUrl = `${import.meta.env.BASE_URL}profile.jpg`;
+const faviconUrl = `${import.meta.env.BASE_URL}favicon.svg`;
+
 // --- COMPONENTS ---
 
 const useCountUp = (target: number, duration = 1400, decimals = 0) => {
@@ -774,7 +777,7 @@ const AccountTab = () => {
         <div className="relative">
           <div className="w-24 h-24 rounded-full p-0.5 instagram-gradient shadow-lg">
             <img 
-              src="/profile.jpg" 
+              src={profileImageUrl}
               alt="Profile" 
               className="w-full h-full rounded-full object-cover ring-2 ring-white"
               referrerPolicy="no-referrer"
@@ -886,7 +889,7 @@ export default function App() {
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl overflow-hidden shadow-lg shadow-insta-pink/20 border border-slate-100 bg-white">
             <img
-              src="/favicon.svg"
+              src={faviconUrl}
               alt="InstaGraph logo"
               className="w-full h-full object-cover"
             />
@@ -901,7 +904,7 @@ export default function App() {
             Abril 2026
           </div>
           <div className="w-11 h-11 rounded-full border border-slate-200 overflow-hidden ring-2 ring-white shadow-sm">
-            <img src="/profile.jpg" alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            <img src={profileImageUrl} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           </div>
         </div>
       </header>
