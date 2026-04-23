@@ -379,11 +379,54 @@ const StatCard = ({ label, value }: { label: string; value: ReactNode }) => (
   </div>
 );
 
+const buildVideoCommentAnalysis = (video: any) => {
+  const totalComments = video.comments_count || video.comments.length || 0;
+  const positiveCount = video.comments.filter((comment: any) => comment.sentiment === 'positive').length;
+  const positivePercentage = totalComments > 0 ? (positiveCount / totalComments) * 100 : 0;
+
+  const whatLiked = video.comments
+    .filter((comment: any) => comment.sentiment === 'positive')
+    .slice(0, 3)
+    .map((comment: any) => comment.text);
+
+  const whatDidNotLike = video.comments
+    .filter((comment: any) => comment.sentiment !== 'positive')
+    .slice(0, 3)
+    .map((comment: any) => comment.text);
+
+  const summary = positivePercentage >= 70
+    ? 'Predomina una respuesta positiva: valoran la claridad del mensaje y su aplicabilidad. Los pedidos de mejora aparecen vinculados a mayor profundidad o ejemplos concretos.'
+    : positivePercentage >= 40
+      ? 'La recepción fue mixta: hay interés en el tema, pero también observaciones sobre claridad, bajada práctica y alcance de las conclusiones.'
+      : 'La conversación muestra fricción: se detectan dudas y desacuerdos relevantes. Conviene reforzar argumentos, evidencias y ejemplos de implementación.';
+
+  const suggestedTopics = [
+    'Profundizar con casos reales paso a paso.',
+    'Responder preguntas frecuentes que surgieron en los comentarios.',
+    'Crear una segunda parte con foco práctico y accionable.'
+  ];
+
+  return {
+    totalComments,
+    positivePercentage,
+    whatLiked,
+    whatDidNotLike,
+    summary,
+    suggestedTopics
+  };
+};
+
 const VideoRow = ({ video }: any) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const analysis = useMemo(() => buildVideoCommentAnalysis(video), [video]);
 
   return (
-    <div className="card mb-4 transition-all hover:shadow-md">
+    <motion.div
+      layout
+      animate={isExpanded ? { width: 'calc(100% + 2.5rem)', x: '-1.25rem' } : { width: '100%', x: 0 }}
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      className="card mb-4 transition-all hover:shadow-md"
+    >
       <div 
         className="p-4 flex items-center gap-4 cursor-pointer"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -428,38 +471,66 @@ const VideoRow = ({ video }: any) => {
       <AnimatePresence>
         {isExpanded && (
           <motion.div 
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            initial={{ height: 0, opacity: 0, y: -8 }}
+            animate={{ height: 'auto', opacity: 1, y: 0 }}
+            exit={{ height: 0, opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, delay: 0.15 }}
             className="border-t border-slate-100 bg-slate-50/30 p-5"
           >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <MessageSquare className="w-3 h-3" /> Comentarios
-                </h5>
-                <div className="space-y-2">
-                  {video.comments.map((comment, idx) => (
-                    <div key={idx} className="bg-white p-3 rounded-lg border border-slate-100 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                      <p className="text-[10px] font-bold text-slate-900">@{comment.user}</p>
-                      <p className="text-xs text-slate-600 mt-0.5 line-clamp-2">{comment.text}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3">
                 <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-                  <TrendingUp className="w-3 h-3" /> Insights
+                  <TrendingUp className="w-3 h-3" /> Análisis de Comentarios del Video
                 </h5>
-                <div className="bg-white p-4 rounded-lg border border-slate-100 shadow-[0_1px_2px_rgba(0,0,0,0.02)] grow flex items-center justify-center text-center">
-                  <p className="text-[10px] font-medium text-slate-400 italic">Análisis de rendimiento por hora en curso...</p>
+                <div className="bg-white p-4 rounded-lg border border-slate-100 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cantidad de comentarios</p>
+                      <p className="text-xl font-bold text-slate-900 mt-1">{analysis.totalComments.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
+                      <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Comentarios positivos</p>
+                      <p className="text-xl font-bold text-emerald-700 mt-1">{analysis.positivePercentage.toFixed(1)}%</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div className="bg-sky-50 rounded-lg p-3 border border-sky-100">
+                      <p className="text-[10px] font-bold text-sky-700 uppercase tracking-wider mb-2">Qué les gustó</p>
+                      <div className="space-y-1.5">
+                        {(analysis.whatLiked.length > 0 ? analysis.whatLiked : ['No hay suficientes comentarios positivos para extraer patrones.']).map((item: string) => (
+                          <p key={item} className="text-xs text-slate-600 leading-relaxed">• {item}</p>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
+                      <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-2">Qué no les gustó</p>
+                      <div className="space-y-1.5">
+                        {(analysis.whatDidNotLike.length > 0 ? analysis.whatDidNotLike : ['No se detectaron críticas relevantes en los comentarios disponibles.']).map((item: string) => (
+                          <p key={item} className="text-xs text-slate-600 leading-relaxed">• {item}</p>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 mb-3">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Resumen IA</p>
+                    <p className="text-xs text-slate-600 italic leading-relaxed">{analysis.summary}</p>
+                  </div>
+
+                  <div className="bg-violet-50 rounded-lg p-3 border border-violet-100">
+                    <p className="text-[10px] font-bold text-violet-700 uppercase tracking-wider mb-2">Temas a tratar (siguiente video)</p>
+                    <div className="space-y-1.5">
+                      {analysis.suggestedTopics.map((topic: string) => (
+                        <p key={topic} className="text-xs text-slate-600 leading-relaxed">• {topic}</p>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 };
 
@@ -740,7 +811,7 @@ const VideosTab = () => {
     <motion.div 
       initial={{ opacity: 0 }} 
       animate={{ opacity: 1 }}
-      className="max-w-4xl mx-auto"
+      className="max-w-4xl mx-auto overflow-x-visible px-5"
     >
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
