@@ -423,9 +423,9 @@ const VideoRow = ({ video }: any) => {
   return (
     <motion.div
       layout
-      animate={isExpanded ? { width: 'calc(100% + 2.5rem)', x: '-1.25rem' } : { width: '100%', x: 0 }}
+      animate={isExpanded ? { scaleX: 1.08 } : { scaleX: 1}}
       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-      className="card mb-4 transition-all hover:shadow-md"
+      className="card mb-4 transition-all hover:shadow-md origin-center"
     >
       <div 
         className="p-4 flex items-center gap-4 cursor-pointer"
