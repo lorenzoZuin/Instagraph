@@ -9,7 +9,7 @@ import {
   ScatterChart, Scatter, ZAxis, Cell, PieChart, Pie, ReferenceLine
 } from 'recharts';
 import { 
-  Instagram, TrendingUp, Users, Play, Heart, MessageCircle, Share2, 
+  Instagram, Users, Play, Heart, MessageCircle, Share2, 
   ChevronDown, ChevronUp, Calendar, ArrowUpRight, BarChart3, AppWindow,
   MessageSquare, Sparkles, LayoutDashboard, Film
 } from 'lucide-react';
@@ -303,6 +303,30 @@ const VIDEOS = MOCK_VIDEOS.map((video) => ({
   fallbackThumbnail: video.thumbnail,
   thumbnail: csvThumbnailByStats.get(buildVideoKey(video)) ?? video.thumbnail
 }));
+const ALL_CHANNEL_VIDEOS = (() => {
+  const rows = parseCsv(reelsCsvRaw);
+
+  return rows
+    .map((row, index) => {
+      const views = Number(row.play_count || row.view_count || 0);
+      const likes = Number(row.like_count || 0);
+      const comments_count = Number(row.comment_count || 0);
+      const title = (row.caption_text || `Video ${index + 1}`).trim();
+      const date = row.publication_date?.slice(0, 10) || '';
+      const engagement = views > 0 ? ((likes + comments_count) / views) * 100 : 0;
+
+      return {
+        id: row.media_id || String(index + 1),
+        title,
+        views,
+        likes,
+        comments_count,
+        engagement,
+        date
+      };
+    })
+    .filter((video) => video.views > 0 || video.likes > 0 || video.comments_count > 0);
+})();
 
 const ACCOUNT_STATS = {
   total_followers: 1122856,
@@ -379,43 +403,6 @@ const StatCard = ({ label, value }: { label: string; value: ReactNode }) => (
   </div>
 );
 
-const buildVideoCommentAnalysis = (video: any) => {
-  const totalComments = video.comments_count || video.comments.length || 0;
-  const positiveCount = video.comments.filter((comment: any) => comment.sentiment === 'positive').length;
-  const positivePercentage = totalComments > 0 ? (positiveCount / totalComments) * 100 : 0;
-
-  const whatLiked = video.comments
-    .filter((comment: any) => comment.sentiment === 'positive')
-    .slice(0, 3)
-    .map((comment: any) => comment.text);
-
-  const whatDidNotLike = video.comments
-    .filter((comment: any) => comment.sentiment !== 'positive')
-    .slice(0, 3)
-    .map((comment: any) => comment.text);
-
-  const summary = positivePercentage >= 70
-    ? 'Predomina una respuesta positiva: valoran la claridad del mensaje y su aplicabilidad. Los pedidos de mejora aparecen vinculados a mayor profundidad o ejemplos concretos.'
-    : positivePercentage >= 40
-      ? 'La recepción fue mixta: hay interés en el tema, pero también observaciones sobre claridad, bajada práctica y alcance de las conclusiones.'
-      : 'La conversación muestra fricción: se detectan dudas y desacuerdos relevantes. Conviene reforzar argumentos, evidencias y ejemplos de implementación.';
-
-  const suggestedTopics = [
-    'Profundizar con casos reales paso a paso.',
-    'Responder preguntas frecuentes que surgieron en los comentarios.',
-    'Crear una segunda parte con foco práctico y accionable.'
-  ];
-
-  return {
-    totalComments,
-    positivePercentage,
-    whatLiked,
-    whatDidNotLike,
-    summary,
-    suggestedTopics
-  };
-};
-
 const buildWeightedDistribution = (
   total: number,
   segments: Array<{ name: string; weight: number; color: string }>
@@ -448,6 +435,41 @@ const buildWeightedDistribution = (
     });
 
   return provisional.map(({ name, color, base }) => ({ name, color, value: base }));
+};
+
+const generateOpinionSummaries = (video: any) => {
+  const title = video.title.toLowerCase();
+
+  let positiveSummary = 'La audiencia valoró la claridad con que se abordó una experiencia muy común.';
+  let negativeSummary = 'Algunos no vivieron esa experiencia específica y sintieron que no se aplicaba a su contexto.';
+
+  if (title.includes('padre') || title.includes('paternidad')) {
+    positiveSummary = 'Les gustó que hayas tocado una experiencia tan común pero tan profunda: ser padre te da algo diferente. Muchos se sintieron representados.';
+    negativeSummary = 'Algunos usuarios sin hijos comentaron que no podían relacionarse con la reflexión o pidieron una visión más universal.';
+  } else if (title.includes('obediencia') || title.includes('obedecer')) {
+    positiveSummary = 'Valoraron que expongas un comportamiento automático que experimentan en sus vidas cotidianas sin darse cuenta. Se sintieron identificados al reconocer patrones propios.';
+    negativeSummary = 'Algunos cuestionaron si el experimento en el que basas la reflexión realmente aplica en contextos actuales o si exageraba la conclusión.';
+  } else if (title.includes('identidad') || title.includes('propósito')) {
+    positiveSummary = 'Resonó profundamente cómo describes la búsqueda de identidad como algo que todos viven. Muchos agradecieron el reflejo de su propia confusión.';
+    negativeSummary = 'Algunos sintieron que tu reflexión no capturaba su realidad específica o que las herramientas sugeridas no aplicaban a sus circunstancias.';
+  } else if (title.includes('claude') || title.includes('ia') || title.includes('tecnología')) {
+    positiveSummary = 'Apreciaron que muestres cómo esta tecnología resuelve problemas reales y cotidianos, no solo especulación teórica.';
+    negativeSummary = 'Algunos sintieron que no abordaste los límites éticos o que el optimismo no reflejaba los riesgos que ya experimentan en sus roles.';
+  } else if (title.includes('crítico') || title.includes('autocrítica')) {
+    positiveSummary = 'Muchos se identificaron con ese "crítico interno" que describes. Les gustó reconocer algo que viven pero no habían podido nombrar claramente.';
+    negativeSummary = 'Algunos sintieron que tu experiencia sobre la autocrítica era muy personal y no la compartían, o que las estrategias propuestas no funcionaban para ellos.';
+  } else if (title.includes('silencio') || title.includes('ruido')) {
+    positiveSummary = 'Validó una experiencia muy común pero poco hablada: que algunos necesitan silencio y otros caos para rendir. Se sintieron finalmente entendidos.';
+    negativeSummary = 'Algunos comentaron que esto es demasiado simplista o que sus necesidades cognitivas no encajaban en tu dicotomía propuesta.';
+  } else if (title.includes('seguridad') || title.includes('confianza')) {
+    positiveSummary = 'Les gustó que hayas sacado a la luz cómo la gente habla con seguridad sin saber realmente. Muchos reconocieron comportamientos propios.';
+    negativeSummary = 'Algunos no estuvieron de acuerdo con tus ejemplos específicos o sintieron que no reflejaba su realidad profesional.';
+  } else if (title.includes('automatico') || title.includes('pensamiento')) {
+    positiveSummary = 'Apreciaron que expliques por qué nuestro cerebro funciona así. Se sintieron validados al entender sus propios atajos mentales automáticos.';
+    negativeSummary = 'Algunos sintieron que la simplificación no capturaba la complejidad de cómo realmente funciona su pensamiento.';
+  }
+
+  return { positiveSummary, negativeSummary };
 };
 
 const buildVideoCommentCharts = (video: any) => {
@@ -488,8 +510,7 @@ const buildVideoCommentCharts = (video: any) => {
     aggressivenessIndex: againstCount > 0 ? (aggressiveAgainst / againstCount) * 100 : 0
   };
 
-  const positiveSummary = 'Las opiniones positivas destacan la utilidad del contenido, la claridad de la explicación y la posibilidad de aplicar las ideas en contextos reales.';
-  const negativeSummary = 'Las opiniones negativas se enfocan en desacuerdos sobre el enfoque, pedidos de mayor profundidad y cuestionamientos sobre evidencia o matices del análisis.';
+  const { positiveSummary, negativeSummary } = generateOpinionSummaries(video);
 
   return {
     totalComments,
@@ -505,6 +526,150 @@ const buildVideoCommentCharts = (video: any) => {
     negativeSummary,
     neutralCount
   };
+};
+
+// --- CATEGORIZACIÓN DE VIDEOS ---
+
+const categorizeVideo = (video: any): string => {
+  const title = video.title.toLowerCase();
+  if (
+    title.includes('ia') ||
+    title.includes('claude') ||
+    title.includes('inteligencia artificial') ||
+    title.includes('chatgpt') ||
+    title.includes('modelo')
+  ) {
+    return 'Inteligencia Artificial';
+  }
+
+  if (
+    title.includes('padre') ||
+    title.includes('crianza') ||
+    title.includes('hijo') ||
+    title.includes('hija') ||
+    title.includes('familia')
+  ) {
+    return 'Crianza';
+  }
+
+  if (
+    title.includes('neurociencia') ||
+    title.includes('cerebro') ||
+    title.includes('hábito') ||
+    title.includes('habito') ||
+    title.includes('psicolog') ||
+    title.includes('conducta') ||
+    title.includes('silencio') ||
+    title.includes('crítico') ||
+    title.includes('critico')
+  ) {
+    return 'Neurociencia y Hábitos';
+  }
+
+  if (
+    title.includes('identidad') ||
+    title.includes('propósito') ||
+    title.includes('proposito') ||
+    title.includes('vocación') ||
+    title.includes('vocacion') ||
+    title.includes('carrera') ||
+    title.includes('aprendizaje') ||
+    title.includes('aprender') ||
+    title.includes('educa')
+  ) {
+    return 'Aprendizaje';
+  }
+
+  if (
+    title.includes('emprende') ||
+    title.includes('negocio') ||
+    title.includes('startup') ||
+    title.includes('empresa') ||
+    title.includes('ventas')
+  ) {
+    return 'Emprendedurismo';
+  }
+
+  if (
+    title.includes('sociedad') ||
+    title.includes('social') ||
+    title.includes('innovación') ||
+    title.includes('innovacion') ||
+    title.includes('relación') ||
+    title.includes('relacion') ||
+    title.includes('vínculos') ||
+    title.includes('vinculos') ||
+    title.includes('tecnología') ||
+    title.includes('tecnologia')
+  ) {
+    return 'Innovación y Sociedad';
+  }
+
+  return 'Innovación y Sociedad';
+};
+
+const VIDEO_CATEGORIES = {
+  'Emprendedurismo': '#f59e0b',
+  'Neurociencia y Hábitos': '#ec4899',
+  'Aprendizaje': '#0ea5e9',
+  'Inteligencia Artificial': '#8b5cf6',
+  'Crianza': '#10b981',
+  'Innovación y Sociedad': '#6366f1'
+};
+
+const buildCategoryChartData = (sourceVideos: Array<{ title: string; views: number; likes: number; engagement: number }>) => {
+  const categorizedVideos = sourceVideos.map(video => ({
+    ...video,
+    category: categorizeVideo(video)
+  }));
+
+  const categoryStats = Object.keys(VIDEO_CATEGORIES).map(category => {
+    const videos = categorizedVideos.filter(v => v.category === category);
+    if (videos.length === 0) return null;
+
+    const totalViews = videos.reduce((acc, v) => acc + v.views, 0);
+    const totalLikes = videos.reduce((acc, v) => acc + v.likes, 0);
+    const avgEngagement = videos.reduce((acc, v) => acc + v.engagement, 0) / videos.length;
+
+    return {
+      name: category,
+      views: totalViews,
+      engagement: parseFloat(avgEngagement.toFixed(1)),
+      size: totalLikes / 100,
+      color: VIDEO_CATEGORIES[category as keyof typeof VIDEO_CATEGORIES]
+    };
+  }).filter((item): item is Exclude<typeof item, null> => item !== null);
+
+  return categoryStats;
+};
+
+const MONTHLY_CATEGORY_CHART_DATA = buildCategoryChartData(VIDEOS);
+const CHANNEL_CATEGORY_CHART_DATA = buildCategoryChartData(ALL_CHANNEL_VIDEOS);
+const ACCOUNT_CATEGORY_CHART_MOCK = [
+  { name: 'Emprendedurismo', views: 1320000, engagement: 5.2, size: 460, color: VIDEO_CATEGORIES['Emprendedurismo'] },
+  { name: 'Neurociencia y Hábitos', views: 2840000, engagement: 6.7, size: 690, color: VIDEO_CATEGORIES['Neurociencia y Hábitos'] },
+  { name: 'Aprendizaje', views: 1910000, engagement: 4.8, size: 520, color: VIDEO_CATEGORIES['Aprendizaje'] },
+  { name: 'Inteligencia Artificial', views: 2480000, engagement: 6.1, size: 620, color: VIDEO_CATEGORIES['Inteligencia Artificial'] },
+  { name: 'Crianza', views: 3010000, engagement: 5.0, size: 560, color: VIDEO_CATEGORIES['Crianza'] },
+  { name: 'Innovación y Sociedad', views: 2260000, engagement: 4.3, size: 500, color: VIDEO_CATEGORIES['Innovación y Sociedad'] }
+];
+const MacroTopicBubble = (props: any) => {
+  const { cx, cy, payload } = props;
+  const radius = Math.max(14, Math.min(28, (payload?.size ?? 300) / 22));
+
+  return (
+    <g>
+      <circle
+        cx={cx}
+        cy={cy}
+        r={radius}
+        fill={payload?.color ?? '#6366f1'}
+        fillOpacity={0.9}
+        stroke="#ffffff"
+        strokeWidth={2}
+      />
+    </g>
+  );
 };
 
 const VIDEO_COMMENT_CHARTS = VIDEOS.map((video) => ({
@@ -583,9 +748,8 @@ const COMMENT_CHARTS_AVERAGES = (() => {
   };
 })();
 
-const VideoRow = ({ video }: any) => {
+const VideoRow = ({ video, isTarget = false }: { video: any; isTarget?: boolean }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const analysis = useMemo(() => buildVideoCommentAnalysis(video), [video]);
   const charts = useMemo(() => buildVideoCommentCharts(video), [video]);
   const averages = COMMENT_CHARTS_AVERAGES;
   const averageShortRatio = averages.totalComments > 0
@@ -598,7 +762,7 @@ const VideoRow = ({ video }: any) => {
       layout
       animate={isExpanded ? { width: '106%', x: '-3%' } : { width: '100%', x: '0%' }}
       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-      className="card mb-4 transition-all hover:shadow-md"
+      className={`card mb-4 transition-all hover:shadow-md ${isTarget ? 'ring-2 ring-insta-pink/50 shadow-md' : ''}`}
     >
       <div 
         className="p-4 flex items-center gap-4 cursor-pointer"
@@ -800,55 +964,6 @@ const VideoRow = ({ video }: any) => {
                     </div>
                   </div>
                 </div>
-
-                <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-                  <TrendingUp className="w-3 h-3" /> Análisis de Comentarios del Video
-                </h5>
-                <div className="bg-white p-4 rounded-lg border border-slate-100 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cantidad de comentarios</p>
-                      <p className="text-xl font-bold text-slate-900 mt-1">{analysis.totalComments.toLocaleString()}</p>
-                    </div>
-                    <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
-                      <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Comentarios positivos</p>
-                      <p className="text-xl font-bold text-emerald-700 mt-1">{analysis.positivePercentage.toFixed(1)}%</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                    <div className="bg-sky-50 rounded-lg p-3 border border-sky-100">
-                      <p className="text-[10px] font-bold text-sky-700 uppercase tracking-wider mb-2">Qué les gustó</p>
-                      <div className="space-y-1.5">
-                        {(analysis.whatLiked.length > 0 ? analysis.whatLiked : ['No hay suficientes comentarios positivos para extraer patrones.']).map((item: string) => (
-                          <p key={item} className="text-xs text-slate-600 leading-relaxed">• {item}</p>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
-                      <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-2">Qué no les gustó</p>
-                      <div className="space-y-1.5">
-                        {(analysis.whatDidNotLike.length > 0 ? analysis.whatDidNotLike : ['No se detectaron críticas relevantes en los comentarios disponibles.']).map((item: string) => (
-                          <p key={item} className="text-xs text-slate-600 leading-relaxed">• {item}</p>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 mb-3">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Resumen IA</p>
-                    <p className="text-xs text-slate-600 italic leading-relaxed">{analysis.summary}</p>
-                  </div>
-
-                  <div className="bg-violet-50 rounded-lg p-3 border border-violet-100">
-                    <p className="text-[10px] font-bold text-violet-700 uppercase tracking-wider mb-2">Temas a tratar (siguiente video)</p>
-                    <div className="space-y-1.5">
-                      {analysis.suggestedTopics.map((topic: string) => (
-                        <p key={topic} className="text-xs text-slate-600 leading-relaxed">• {topic}</p>
-                      ))}
-                    </div>
-                  </div>
-                </div>
             </div>
           </motion.div>
         )}
@@ -859,9 +974,11 @@ const VideoRow = ({ video }: any) => {
 
 // --- TABS ---
 
-const SummaryTab = () => {
+const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => void }) => {
   const chartData = useMemo(() => VIDEOS.map(v => ({
+    id: v.id,
     name: v.title,
+    shortLabel: v.title.length > 22 ? `${v.title.slice(0, 22)}...` : v.title,
     views: v.views,
     engagement: v.engagement,
     size: v.likes / 100
@@ -970,12 +1087,32 @@ const SummaryTab = () => {
                 />
                 <ZAxis type="number" dataKey="size" range={[120, 560]} />
                 <Tooltip 
-                  cursor={{ strokeDasharray: '3 3' }} 
+                  cursor={{ strokeDasharray: '3 3' }}
+                  labelFormatter={(_, payload) => payload?.[0]?.payload?.name ?? ''}
+                  formatter={(value: number, key: string) => {
+                    if (key === 'views') {
+                      return [Number(value).toLocaleString('es-AR'), 'Vistas'];
+                    }
+                    if (key === 'engagement') {
+                      return [`${Number(value).toFixed(1)}%`, 'Engagement'];
+                    }
+                    return [value, key];
+                  }}
                   contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '14px', padding: '10px 12px' }}
                 />
-                <Scatter name="Videos" data={chartData}>
+                <Scatter
+                  name="Videos"
+                  data={chartData}
+                  onClick={(point: any) => {
+                    const clickedId = point?.id ?? point?.payload?.id;
+                    if (clickedId) {
+                      onVideoSelect(String(clickedId));
+                    }
+                  }}
+                  activeDot={{ r: 10 }}
+                >
                   {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} className="bubble" fill="url(#insta-gradient-fill)" />
+                    <Cell key={`cell-${index}`} className="bubble cursor-pointer" fill="url(#insta-gradient-fill)" />
                   ))}
                   <defs>
                     <linearGradient id="insta-gradient-fill" x1="0" y1="0" x2="1" y2="1">
@@ -989,6 +1126,73 @@ const SummaryTab = () => {
                 </Scatter>
               </ScatterChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Desempeño por Tema Macro */}
+        <div className="card p-6 flex flex-col flex-grow relative overflow-hidden min-h-[560px] lg:min-h-[700px]">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-xl font-bold mb-4">Desempeño por Tema Macro</h2>
+              <p className="text-sm text-slate-500">Distribución mensual de videos por categoría temática</p>
+            </div>
+          </div>
+          <div className="flex-grow relative border-l border-b border-slate-100 m-2 mt-4 mb-8">
+            <ResponsiveContainer width="100%" height="100%">
+              <ScatterChart margin={{ top: 36, right: 46, bottom: 52, left: 40 }}>
+                <CartesianGrid strokeDasharray="2 4" vertical={true} stroke="#cbd5e1" />
+                <XAxis 
+                  type="number" 
+                  dataKey="views" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 14 }}
+                  label={{ value: 'Vistas', position: 'insideBottom', offset: -12, fill: '#64748b', fontSize: 14 }}
+                />
+                <YAxis 
+                  type="number" 
+                  dataKey="engagement" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 14 }}
+                  label={{ value: 'Engagement (%)', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 14, dx: -12 }}
+                />
+                <ZAxis type="number" dataKey="size" range={[140, 700]} />
+                <Tooltip 
+                  cursor={{ strokeDasharray: '3 3' }} 
+                  contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '14px', padding: '10px 12px' }}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload[0]) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-white p-3 rounded-lg border border-slate-200">
+                          <p className="text-sm font-bold text-slate-900">{data.name}</p>
+                          <p className="text-xs text-slate-600">Vistas: {(data.views / 1000000).toFixed(1)}M</p>
+                          <p className="text-xs text-slate-600">Engagement: {data.engagement}%</p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Scatter name="Categorías" data={MONTHLY_CATEGORY_CHART_DATA}>
+                  {MONTHLY_CATEGORY_CHART_DATA.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Scatter>
+              </ScatterChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex flex-wrap gap-3 justify-center px-4 pb-2">
+            {MONTHLY_CATEGORY_CHART_DATA.map((category) => (
+              <div key={category.name} className="flex items-center gap-2">
+                <div 
+                  className="w-3 h-3 rounded-full" 
+                  style={{ backgroundColor: category.color }}
+                ></div>
+                <span className="text-xs font-medium text-slate-600">{category.name}</span>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -1129,7 +1333,18 @@ const SummaryTab = () => {
   );
 };
 
-const VideosTab = () => {
+const VideosTab = ({ targetVideoId }: { targetVideoId: string | null }) => {
+  useEffect(() => {
+    if (!targetVideoId) {
+      return;
+    }
+
+    const targetElement = document.querySelector(`[data-video-id="${targetVideoId}"]`) as HTMLElement | null;
+    if (targetElement) {
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [targetVideoId]);
+
   return (
     <motion.div 
       initial={{ opacity: 0 }} 
@@ -1152,7 +1367,9 @@ const VideosTab = () => {
       
       <div className="space-y-3">
         {VIDEOS.map(video => (
-          <VideoRow key={video.id} video={video} />
+          <div key={video.id} data-video-id={video.id}>
+            <VideoRow video={video} isTarget={targetVideoId === video.id} />
+          </div>
         ))}
       </div>
     </motion.div>
@@ -1269,12 +1486,77 @@ const AccountTab = () => {
           </div>
         </div>
       </div>
+
+      {/* Desempeño por Tema Macro (Histórico del Canal) */}
+      <div className="card p-6 relative overflow-hidden">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-xl font-bold mb-4">Desempeño por Tema Macro</h2>
+            <p className="text-sm text-slate-500">Histórico completo del canal por categoría temática</p>
+          </div>
+        </div>
+        <div className="relative border-l border-b border-slate-200 m-2 mt-4 mb-8 h-[420px] lg:h-[560px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 36, right: 46, bottom: 52, left: 40 }}>
+              <CartesianGrid strokeDasharray="3 4" vertical={true} stroke="#94a3b8" />
+              <XAxis
+                type="number"
+                dataKey="views"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#94a3b8', fontSize: 14 }}
+                label={{ value: 'Vistas', position: 'insideBottom', offset: -12, fill: '#64748b', fontSize: 14 }}
+              />
+              <YAxis
+                type="number"
+                dataKey="engagement"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#94a3b8', fontSize: 14 }}
+                label={{ value: 'Engagement (%)', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 14, dx: -12 }}
+              />
+              <ZAxis type="number" dataKey="size" range={[140, 700]} />
+              <Tooltip
+                cursor={{ strokeDasharray: '3 3' }}
+                contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '14px', padding: '10px 12px' }}
+                content={({ active, payload }) => {
+                  if (active && payload && payload[0]) {
+                    const data = payload[0].payload;
+                    return (
+                      <div className="bg-white p-3 rounded-lg border border-slate-200">
+                        <p className="text-sm font-bold text-slate-900">{data.name}</p>
+                        <p className="text-xs text-slate-600">Vistas: {(data.views / 1000000).toFixed(1)}M</p>
+                        <p className="text-xs text-slate-600">Engagement: {data.engagement}%</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              <Scatter name="Categorías" data={ACCOUNT_CATEGORY_CHART_MOCK} shape={<MacroTopicBubble />}>
+                {ACCOUNT_CATEGORY_CHART_MOCK.map((entry, index) => (
+                  <Cell key={`channel-cell-${index}`} fill={entry.color} />
+                ))}
+              </Scatter>
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="flex flex-wrap gap-3 justify-center px-4 pb-2">
+          {ACCOUNT_CATEGORY_CHART_MOCK.map((category) => (
+            <div key={category.name} className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: category.color }}></div>
+              <span className="text-xs font-medium text-slate-600">{category.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </motion.div>
   );
 }
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'summary' | 'videos' | 'account'>('summary');
+  const [targetVideoId, setTargetVideoId] = useState<string | null>(null);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-slate-100 font-sans">
@@ -1312,7 +1594,12 @@ export default function App() {
         ].map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => {
+              setActiveTab(tab.id as any);
+              if (tab.id !== 'videos') {
+                setTargetVideoId(null);
+              }
+            }}
             className={`
               px-6 py-4 text-[11px] font-bold transition-all uppercase tracking-widest border-b-2
               ${activeTab === tab.id 
@@ -1329,9 +1616,16 @@ export default function App() {
       <main className="p-6 flex-grow overflow-hidden relative">
         <div className="h-full overflow-y-auto custom-scrollbar pr-1">
           <AnimatePresence mode="wait">
-            {activeTab === 'summary' && <SummaryTab key="summary" />}
-            {activeTab === 'videos' && <VideosTab key="videos" />}
-            {activeTab === 'account' && <AccountTab key="account" />}
+            {activeTab === 'summary' && (
+              <SummaryTab
+                onVideoSelect={(videoId) => {
+                  setTargetVideoId(videoId);
+                  setActiveTab('videos');
+                }}
+              />
+            )}
+            {activeTab === 'videos' && <VideosTab targetVideoId={targetVideoId} />}
+            {activeTab === 'account' && <AccountTab />}
           </AnimatePresence>
         </div>
       </main>
