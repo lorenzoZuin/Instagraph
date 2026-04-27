@@ -6,7 +6,7 @@
 import { useState, useMemo, useEffect, type ReactNode } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  ScatterChart, Scatter, ZAxis, Cell 
+  ScatterChart, Scatter, ZAxis, Cell, PieChart, Pie, ReferenceLine
 } from 'recharts';
 import { 
   Instagram, TrendingUp, Users, Play, Heart, MessageCircle, Share2, 
@@ -416,16 +416,189 @@ const buildVideoCommentAnalysis = (video: any) => {
   };
 };
 
+const buildWeightedDistribution = (
+  total: number,
+  segments: Array<{ name: string; weight: number; color: string }>
+) => {
+  if (total <= 0) {
+    return segments.map((segment) => ({ ...segment, value: 0 }));
+  }
+
+  const weightSum = segments.reduce((acc, segment) => acc + segment.weight, 0);
+  const provisional = segments.map((segment) => {
+    const exact = (segment.weight / weightSum) * total;
+    const base = Math.floor(exact);
+
+    return {
+      ...segment,
+      base,
+      fraction: exact - base
+    };
+  });
+
+  let remaining = total - provisional.reduce((acc, segment) => acc + segment.base, 0);
+
+  provisional
+    .sort((a, b) => b.fraction - a.fraction)
+    .forEach((segment) => {
+      if (remaining > 0) {
+        segment.base += 1;
+        remaining -= 1;
+      }
+    });
+
+  return provisional.map(({ name, color, base }) => ({ name, color, value: base }));
+};
+
+const buildVideoCommentCharts = (video: any) => {
+  const seed = Number(video.id) || 1;
+  const totalComments = Math.max(video.comments_count || 0, 0);
+  const commentsViewsRatio = video.views > 0 ? totalComments / video.views : 0;
+
+  const longCommentsRate = 0.22 + ((seed * 11) % 24) / 100;
+  const longComments = Math.max(0, Math.round(totalComments * longCommentsRate));
+  const shortComments = Math.max(0, totalComments - longComments);
+
+  const commentTypes = buildWeightedDistribution(totalComments, [
+    { name: 'Humor', weight: 12 + (seed % 4), color: '#f59e0b' },
+    { name: 'Anécdota', weight: 18 + ((seed * 2) % 5), color: '#0ea5e9' },
+    { name: 'Opinión', weight: 20 + ((seed * 3) % 6), color: '#6366f1' },
+    { name: 'Spa', weight: 8 + ((seed * 4) % 4), color: '#ef4444' },
+    { name: 'Petición', weight: 16 + ((seed * 5) % 5), color: '#10b981' },
+    { name: 'Arroba', weight: 14 + ((seed * 6) % 5), color: '#ec4899' }
+  ]);
+
+  const opinionMix = buildWeightedDistribution(totalComments, [
+    { name: 'A favor', weight: 46 + (seed % 6), color: '#10b981' },
+    { name: 'En contra', weight: 22 + ((seed * 2) % 6), color: '#ef4444' },
+    { name: 'Neutras', weight: 32 + ((seed * 3) % 6), color: '#64748b' }
+  ]);
+
+  const positiveCount = opinionMix.find((entry) => entry.name === 'A favor')?.value ?? 0;
+  const neutralCount = opinionMix.find((entry) => entry.name === 'Neutras')?.value ?? 0;
+
+  const againstCount = opinionMix.find((entry) => entry.name === 'En contra')?.value ?? 0;
+  const aggressiveAgainst = Math.round(againstCount * (0.34 + ((seed * 7) % 21) / 100));
+  const calmAgainst = Math.max(0, againstCount - aggressiveAgainst);
+
+  const againstTone = {
+    aggressive: aggressiveAgainst,
+    calm: calmAgainst,
+    total: againstCount,
+    aggressivenessIndex: againstCount > 0 ? (aggressiveAgainst / againstCount) * 100 : 0
+  };
+
+  const positiveSummary = 'Las opiniones positivas destacan la utilidad del contenido, la claridad de la explicación y la posibilidad de aplicar las ideas en contextos reales.';
+  const negativeSummary = 'Las opiniones negativas se enfocan en desacuerdos sobre el enfoque, pedidos de mayor profundidad y cuestionamientos sobre evidencia o matices del análisis.';
+
+  return {
+    totalComments,
+    commentsViewsRatio,
+    lengthBreakdown: {
+      shortComments,
+      longComments
+    },
+    commentTypes,
+    opinionMix,
+    againstTone,
+    positiveSummary,
+    negativeSummary,
+    neutralCount
+  };
+};
+
+const VIDEO_COMMENT_CHARTS = VIDEOS.map((video) => ({
+  id: video.id,
+  charts: buildVideoCommentCharts(video)
+}));
+
+const COMMENT_CHARTS_AVERAGES = (() => {
+  const totalVideos = Math.max(VIDEO_COMMENT_CHARTS.length, 1);
+  const firstCharts = VIDEO_COMMENT_CHARTS[0]?.charts;
+
+  const baseCommentTypes = firstCharts?.commentTypes.map((entry: any) => ({
+    name: entry.name,
+    color: entry.color,
+    value: 0
+  })) ?? [];
+
+  const baseOpinionMix = firstCharts?.opinionMix.map((entry: any) => ({
+    name: entry.name,
+    color: entry.color,
+    value: 0
+  })) ?? [];
+
+  const totals = VIDEO_COMMENT_CHARTS.reduce((acc, item) => {
+    const { charts } = item;
+
+    acc.totalComments += charts.totalComments;
+    acc.commentsViewsRatio += charts.commentsViewsRatio;
+    acc.shortComments += charts.lengthBreakdown.shortComments;
+    acc.longComments += charts.lengthBreakdown.longComments;
+    acc.aggressive += charts.againstTone.aggressive;
+    acc.calm += charts.againstTone.calm;
+    acc.aggressivenessIndex += charts.againstTone.aggressivenessIndex;
+
+    charts.commentTypes.forEach((entry: any, index: number) => {
+      acc.commentTypes[index].value += entry.value;
+    });
+
+    charts.opinionMix.forEach((entry: any, index: number) => {
+      acc.opinionMix[index].value += entry.value;
+    });
+
+    return acc;
+  }, {
+    totalComments: 0,
+    commentsViewsRatio: 0,
+    shortComments: 0,
+    longComments: 0,
+    aggressive: 0,
+    calm: 0,
+    aggressivenessIndex: 0,
+    commentTypes: baseCommentTypes,
+    opinionMix: baseOpinionMix
+  });
+
+  return {
+    totalComments: totals.totalComments / totalVideos,
+    commentsViewsRatio: totals.commentsViewsRatio / totalVideos,
+    lengthBreakdown: {
+      shortComments: totals.shortComments / totalVideos,
+      longComments: totals.longComments / totalVideos
+    },
+    commentTypes: totals.commentTypes.map((entry: any) => ({
+      ...entry,
+      value: entry.value / totalVideos
+    })),
+    opinionMix: totals.opinionMix.map((entry: any) => ({
+      ...entry,
+      value: entry.value / totalVideos
+    })),
+    againstTone: {
+      aggressive: totals.aggressive / totalVideos,
+      calm: totals.calm / totalVideos,
+      aggressivenessIndex: totals.aggressivenessIndex / totalVideos
+    }
+  };
+})();
+
 const VideoRow = ({ video }: any) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const analysis = useMemo(() => buildVideoCommentAnalysis(video), [video]);
+  const charts = useMemo(() => buildVideoCommentCharts(video), [video]);
+  const averages = COMMENT_CHARTS_AVERAGES;
+  const averageShortRatio = averages.totalComments > 0
+    ? averages.lengthBreakdown.shortComments / averages.totalComments
+    : 0;
+  const averageCutPosition = Math.max(charts.totalComments, 1) * averageShortRatio;
 
   return (
     <motion.div
       layout
-      animate={isExpanded ? { scaleX: 1.08 } : { scaleX: 1}}
+      animate={isExpanded ? { width: '106%', x: '-3%' } : { width: '100%', x: '0%' }}
       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-      className="card mb-4 transition-all hover:shadow-md origin-center"
+      className="card mb-4 transition-all hover:shadow-md"
     >
       <div 
         className="p-4 flex items-center gap-4 cursor-pointer"
@@ -478,6 +651,156 @@ const VideoRow = ({ video }: any) => {
             className="border-t border-slate-100 bg-slate-50/30 p-5"
           >
             <div className="flex flex-col gap-3">
+                <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+                  <BarChart3 className="w-3 h-3" /> Gráficos de comentarios
+                </h5>
+                <div className="bg-white p-4 rounded-lg border border-slate-100 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total de comentarios</p>
+                      <p className="text-xl font-bold text-slate-900 mt-1">{charts.totalComments.toLocaleString()}</p>
+                      <p className="text-[11px] text-slate-500 mt-1">Promedio: {Math.round(averages.totalComments).toLocaleString('es-AR')}</p>
+                    </div>
+                    <div className="bg-indigo-50 rounded-lg p-3 border border-indigo-100">
+                      <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">Índice comentarios / views</p>
+                      <p className="text-xl font-bold text-indigo-700 mt-1">{(charts.commentsViewsRatio * 100).toFixed(2)}</p>
+                      <p className="text-[11px] text-indigo-700/80 mt-1">Promedio índice: {(averages.commentsViewsRatio * 100).toFixed(2)}</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 mb-4">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Proporción de comentarios largos y cortos</p>
+                    <div className="w-full h-10">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={[
+                            {
+                              label: 'Video',
+                              Cortos: charts.lengthBreakdown.shortComments,
+                              Largos: charts.lengthBreakdown.longComments
+                            },
+                          ]}
+                          layout="vertical"
+                            barSize={10}
+                          margin={{ top: 8, right: 0, bottom: 8, left: 0 }}
+                        >
+                          <XAxis type="number" hide domain={[0, Math.max(charts.totalComments, 1)]} />
+                          <YAxis type="category" dataKey="label" hide />
+                          <Tooltip formatter={(value: number) => value.toLocaleString('es-AR')} />
+                            <Bar dataKey="Cortos" stackId="comments-length" fill="#38bdf8" radius={[999, 0, 0, 999]} />
+                            <Bar dataKey="Largos" stackId="comments-length" fill="#f97316" radius={[0, 999, 999, 0]} />
+                            <ReferenceLine
+                              x={averageCutPosition}
+                              stroke="#475569"
+                              strokeDasharray="4 4"
+                              strokeWidth={2}
+                            />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex flex-wrap gap-4 mt-2">
+                      <p className="text-xs font-medium text-sky-600">Cortos: {charts.lengthBreakdown.shortComments.toLocaleString()}</p>
+                      <p className="text-xs font-medium text-orange-600">Largos: {charts.lengthBreakdown.longComments.toLocaleString()}</p>
+                      <p className="text-xs font-medium text-slate-600">Media de proporción (corte): {(averageShortRatio * 100).toFixed(1)}% cortos</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="bg-rose-50 rounded-lg p-3 border border-rose-100">
+                      <p className="text-[10px] font-bold text-rose-700 uppercase tracking-wider mb-2">Tipos de comentarios</p>
+                      <div className="h-72">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={charts.commentTypes}
+                              dataKey="value"
+                              nameKey="name"
+                              cx="50%"
+                              cy="50%"
+                              outerRadius={112}
+                              innerRadius={58}
+                            >
+                              {charts.commentTypes.map((entry: any) => (
+                                <Cell key={`comment-type-${entry.name}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value: number) => value.toLocaleString('es-AR')} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-1 mt-2">
+                        {charts.commentTypes.map((entry: any) => (
+                          <p key={entry.name} className="text-[11px] text-slate-600 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></span>
+                            {entry.name}: {entry.value}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_11rem] gap-3">
+                      <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
+                        <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-2">Opiniones</p>
+                        <div className="h-44">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={charts.opinionMix} margin={{ top: 8, right: 6, bottom: 18, left: 0 }}>
+                              <XAxis
+                                dataKey="name"
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fill: '#64748b', fontSize: 11 }}
+                              />
+                              <YAxis hide domain={[0, 'dataMax + 5']} />
+                              <Tooltip formatter={(value: number) => value.toLocaleString('es-AR')} />
+                              <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                                {charts.opinionMix.map((entry: any) => (
+                                  <Cell key={`opinion-${entry.name}`} fill={entry.color} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="flex flex-wrap gap-4 mt-2">
+                          {charts.opinionMix.map((entry: any) => (
+                            <p key={entry.name} className="text-xs text-slate-600 font-medium flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></span>
+                              {entry.name}: {entry.value}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-lg p-3 border border-slate-200 text-slate-800 flex flex-col items-center justify-center">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2 text-center">Termómetro negativo</p>
+                        <div className="h-44 w-10 rounded-full bg-slate-100 border border-slate-200 relative overflow-hidden">
+                          <div
+                            className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-emerald-400 via-amber-400 to-rose-500"
+                            style={{ height: `${charts.againstTone.aggressivenessIndex.toFixed(1)}%` }}
+                          ></div>
+                          <div
+                            className="absolute left-0 right-0 border-t border-slate-700/70"
+                            style={{ bottom: `${averages.againstTone.aggressivenessIndex.toFixed(1)}%` }}
+                            title={`Promedio ${averages.againstTone.aggressivenessIndex.toFixed(1)}%`}
+                          ></div>
+                        </div>
+                        <p className="text-xs font-bold mt-2 text-rose-600">{charts.againstTone.aggressivenessIndex.toFixed(1)}% agresivas</p>
+                        <p className="text-[10px] text-slate-500 mt-1 text-center">Suele ser: {averages.againstTone.aggressivenessIndex.toFixed(1)}% agresivas</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="bg-emerald-50 rounded-md border border-emerald-100 p-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-1">Opiniones positivas</p>
+                        <p className="text-xs text-slate-700 leading-relaxed">{charts.positiveSummary}</p>
+                      </div>
+                      <div className="bg-rose-50 rounded-md border border-rose-100 p-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-rose-700 mb-1">Opiniones negativas</p>
+                        <p className="text-xs text-slate-700 leading-relaxed">{charts.negativeSummary}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-2">
                   <TrendingUp className="w-3 h-3" /> Análisis de Comentarios del Video
                 </h5>
