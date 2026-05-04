@@ -1060,24 +1060,22 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
     return { totals, averages };
   }, [filteredVideos]);
 
-  const chartData = useMemo(() => filteredVideos.map(v => ({
+  const chartData = useMemo(() => VIDEOS.map(v => ({
     id: v.id,
     name: v.title,
     shortLabel: v.title.length > 22 ? `${v.title.slice(0, 22)}...` : v.title,
     views: v.views,
     engagement: v.engagement,
     size: v.likes / 100
-  })), [filteredVideos]);
+  })), []);
 
   const totals = useMemo(() => ({
-    views: filteredVideos.reduce((acc, v) => acc + v.views, 0),
-    likes: filteredVideos.reduce((acc, v) => acc + v.likes, 0),
-    comments: filteredVideos.reduce((acc, v) => acc + v.comments_count, 0)
-  }), [filteredVideos]);
+    views: VIDEOS.reduce((acc, v) => acc + v.views, 0),
+    likes: VIDEOS.reduce((acc, v) => acc + v.likes, 0),
+    comments: VIDEOS.reduce((acc, v) => acc + v.comments_count, 0)
+  }), []);
 
-  const filteredCategoryChartData = useMemo(() => buildCategoryChartData(filteredVideos), [filteredVideos]);
-
-  const topVideos = [...filteredVideos].sort((a, b) => b.views - a.views).slice(0, 3);
+  const topVideos = [...VIDEOS].sort((a, b) => b.views - a.views).slice(0, 3);
 
   const topLikedComments = useMemo(() => (
     filteredVideos
@@ -1141,29 +1139,12 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
     <motion.div 
       initial={{ opacity: 0 }} 
       animate={{ opacity: 1 }}
-      className="flex flex-col gap-6 lg:h-full"
+      className="flex flex-col lg:flex-row gap-6 lg:h-full"
     >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 card p-5 shrink-0">
-        <div>
-          <h2 className="text-lg font-bold text-slate-800">Filtro de Desempeño</h2>
-          <p className="text-sm text-slate-500 mt-1">Seleccioná un tema macro para ver métricas específicas de esa categoría</p>
-        </div>
-        <select
-          value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
-          className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-bold rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-insta-pink/50 cursor-pointer sm:min-w-[200px]"
-        >
-          {categories.map((cat) => (
-            <option key={cat} value={cat}>{cat}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="flex flex-col lg:flex-row gap-6 lg:h-full">
-        <div className="flex-grow flex flex-col gap-6">
-          {/* Scatter Chart */}
-          <div className="card p-6 flex flex-col flex-grow relative overflow-hidden min-h-[520px] lg:min-h-[620px]">
-            <div className="flex justify-between items-center mb-6">
+      <div className="flex-grow flex flex-col gap-6">
+        {/* Scatter Chart */}
+        <div className="card p-6 flex flex-col flex-grow relative overflow-hidden min-h-[520px] lg:min-h-[620px]">
+          <div className="flex justify-between items-center mb-6">
             <div>
               <h2 className="text-xl font-bold mb-4">Views vs. Engagement Rate</h2>
               <p className="text-sm text-slate-500">Correlación del rendimiento mensual de Reels</p>
@@ -1279,8 +1260,8 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
                     return null;
                   }}
                 />
-                <Scatter name="Categorías" data={filteredCategoryChartData}>
-                  {filteredCategoryChartData.map((entry, index) => (
+                <Scatter name="Categorías" data={MONTHLY_CATEGORY_CHART_DATA}>
+                  {MONTHLY_CATEGORY_CHART_DATA.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Scatter>
@@ -1288,7 +1269,7 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
             </ResponsiveContainer>
           </div>
           <div className="flex flex-wrap gap-3 justify-center px-4 pb-2">
-            {filteredCategoryChartData.map((category) => (
+            {MONTHLY_CATEGORY_CHART_DATA.map((category) => (
               <div key={category.name} className="flex items-center gap-2">
                 <div 
                   className="w-3 h-3 rounded-full" 
@@ -1306,6 +1287,15 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
             <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
               <BarChart3 className="w-4 h-4" /> Análisis de Comentarios del Mes
             </h2>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-insta-pink/50 cursor-pointer"
+            >
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
           </div>
           <div className="bg-white p-4 rounded-lg border border-slate-100 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
@@ -1489,11 +1479,11 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
         <div className="card p-5 flex-shrink-0">
           <h2 className="text-lg font-bold mb-4">Métricas Totales</h2>
           <div className="space-y-4">
-            <StatCard label="Videos" value={<AnimatedTotal value={filteredVideos.length} />} />
+            <StatCard label="Videos" value={<AnimatedTotal value={VIDEOS.length} />} />
             <StatCard label="Vistas" value={<AnimatedTotal value={totals.views} />} />
             <StatCard label="Likes" value={<AnimatedTotal value={totals.likes} />} />
             <StatCard label="Comentarios" value={<AnimatedTotal value={totals.comments} />} />
-            <StatCard label="Engagement Medio" value={<AnimatedTotal value={filteredVideos.length > 0 ? filteredVideos.reduce((acc, v) => acc + parseFloat(v.engagement), 0) / filteredVideos.length : 0} decimals={1} suffix="%" />} />
+            <StatCard label="Engagement Medio" value={<AnimatedTotal value={ACCOUNT_STATS.avg_engagement} decimals={1} suffix="%" />} />
           </div>
         </div>
 
@@ -1526,7 +1516,6 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
             ))}
           </div>
         </div>
-      </div>
       </div>
     </motion.div>
   );
