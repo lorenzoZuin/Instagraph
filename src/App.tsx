@@ -677,23 +677,20 @@ const VIDEO_COMMENT_CHARTS = VIDEOS.map((video) => ({
   charts: buildVideoCommentCharts(video)
 }));
 
-const COMMENT_CHARTS_AVERAGES = (() => {
-  const totalVideos = Math.max(VIDEO_COMMENT_CHARTS.length, 1);
-  const firstCharts = VIDEO_COMMENT_CHARTS[0]?.charts;
-
-  const baseCommentTypes = firstCharts?.commentTypes.map((entry: any) => ({
+const COMMENT_CHARTS_TOTALS = (() => {
+  const baseCommentTypes = VIDEO_COMMENT_CHARTS[0]?.charts.commentTypes.map((entry: any) => ({
     name: entry.name,
     color: entry.color,
     value: 0
   })) ?? [];
 
-  const baseOpinionMix = firstCharts?.opinionMix.map((entry: any) => ({
+  const baseOpinionMix = VIDEO_COMMENT_CHARTS[0]?.charts.opinionMix.map((entry: any) => ({
     name: entry.name,
     color: entry.color,
     value: 0
   })) ?? [];
 
-  const totals = VIDEO_COMMENT_CHARTS.reduce((acc, item) => {
+  return VIDEO_COMMENT_CHARTS.reduce((acc, item) => {
     const { charts } = item;
 
     acc.totalComments += charts.totalComments;
@@ -724,6 +721,11 @@ const COMMENT_CHARTS_AVERAGES = (() => {
     commentTypes: baseCommentTypes,
     opinionMix: baseOpinionMix
   });
+})();
+
+const COMMENT_CHARTS_AVERAGES = (() => {
+  const totalVideos = Math.max(VIDEO_COMMENT_CHARTS.length, 1);
+  const totals = COMMENT_CHARTS_TOTALS;
 
   return {
     totalComments: totals.totalComments / totalVideos,
@@ -975,25 +977,110 @@ const VideoRow = ({ video, isTarget = false }: { video: any; isTarget?: boolean 
 // --- TABS ---
 
 const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => void }) => {
-  const chartData = useMemo(() => VIDEOS.map(v => ({
+  const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
+
+  const categories = useMemo(() => {
+    const cats = new Set(VIDEOS.map(v => categorizeVideo(v)));
+    return ['Todos', ...Array.from(cats)];
+  }, []);
+
+  const filteredVideos = useMemo(() => {
+    if (selectedCategory === 'Todos') return VIDEOS;
+    return VIDEOS.filter(v => categorizeVideo(v) === selectedCategory);
+  }, [selectedCategory]);
+
+  const filteredTotalsAndAverages = useMemo(() => {
+    const filteredCharts = filteredVideos.map(v => ({ charts: buildVideoCommentCharts(v) }));
+    const baseCommentTypes = VIDEO_COMMENT_CHARTS[0]?.charts.commentTypes.map((entry: any) => ({
+      name: entry.name,
+      color: entry.color,
+      value: 0
+    })) ?? [];
+
+    const baseOpinionMix = VIDEO_COMMENT_CHARTS[0]?.charts.opinionMix.map((entry: any) => ({
+      name: entry.name,
+      color: entry.color,
+      value: 0
+    })) ?? [];
+
+    const totals = filteredCharts.reduce((acc, item) => {
+      const { charts } = item;
+      acc.totalComments += charts.totalComments;
+      acc.commentsViewsRatio += charts.commentsViewsRatio;
+      acc.shortComments += charts.lengthBreakdown.shortComments;
+      acc.longComments += charts.lengthBreakdown.longComments;
+      acc.aggressive += charts.againstTone.aggressive;
+      acc.calm += charts.againstTone.calm;
+      acc.aggressivenessIndex += charts.againstTone.aggressivenessIndex;
+
+      charts.commentTypes.forEach((entry: any, index: number) => {
+        acc.commentTypes[index].value += entry.value;
+      });
+
+      charts.opinionMix.forEach((entry: any, index: number) => {
+        acc.opinionMix[index].value += entry.value;
+      });
+
+      return acc;
+    }, {
+      totalComments: 0,
+      commentsViewsRatio: 0,
+      shortComments: 0,
+      longComments: 0,
+      aggressive: 0,
+      calm: 0,
+      aggressivenessIndex: 0,
+      commentTypes: baseCommentTypes,
+      opinionMix: baseOpinionMix
+    });
+
+    const totalFiltered = Math.max(filteredCharts.length, 1);
+    const averages = {
+      totalComments: totals.totalComments / totalFiltered,
+      commentsViewsRatio: totals.commentsViewsRatio / totalFiltered,
+      lengthBreakdown: {
+        shortComments: totals.shortComments / totalFiltered,
+        longComments: totals.longComments / totalFiltered
+      },
+      commentTypes: totals.commentTypes.map((entry: any) => ({
+        ...entry,
+        value: entry.value / totalFiltered
+      })),
+      opinionMix: totals.opinionMix.map((entry: any) => ({
+        ...entry,
+        value: entry.value / totalFiltered
+      })),
+      againstTone: {
+        aggressive: totals.aggressive / totalFiltered,
+        calm: totals.calm / totalFiltered,
+        aggressivenessIndex: totals.aggressivenessIndex / totalFiltered
+      }
+    };
+
+    return { totals, averages };
+  }, [filteredVideos]);
+
+  const chartData = useMemo(() => filteredVideos.map(v => ({
     id: v.id,
     name: v.title,
     shortLabel: v.title.length > 22 ? `${v.title.slice(0, 22)}...` : v.title,
     views: v.views,
     engagement: v.engagement,
     size: v.likes / 100
-  })), []);
+  })), [filteredVideos]);
 
   const totals = useMemo(() => ({
-    views: VIDEOS.reduce((acc, v) => acc + v.views, 0),
-    likes: VIDEOS.reduce((acc, v) => acc + v.likes, 0),
-    comments: VIDEOS.reduce((acc, v) => acc + v.comments_count, 0)
-  }), []);
+    views: filteredVideos.reduce((acc, v) => acc + v.views, 0),
+    likes: filteredVideos.reduce((acc, v) => acc + v.likes, 0),
+    comments: filteredVideos.reduce((acc, v) => acc + v.comments_count, 0)
+  }), [filteredVideos]);
 
-  const topVideos = [...VIDEOS].sort((a, b) => b.views - a.views).slice(0, 3);
+  const filteredCategoryChartData = useMemo(() => buildCategoryChartData(filteredVideos), [filteredVideos]);
+
+  const topVideos = [...filteredVideos].sort((a, b) => b.views - a.views).slice(0, 3);
 
   const topLikedComments = useMemo(() => (
-    VIDEOS
+    filteredVideos
       .flatMap(video => video.comments.map((comment, index) => {
         const baseLikes = video.likes / Math.max(video.comments_count, 1);
         const boost = Math.max(0.7, 1.18 - (index * 0.12));
@@ -1054,12 +1141,29 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
     <motion.div 
       initial={{ opacity: 0 }} 
       animate={{ opacity: 1 }}
-      className="flex flex-col lg:flex-row gap-6 lg:h-full"
+      className="flex flex-col gap-6 lg:h-full"
     >
-      <div className="flex-grow flex flex-col gap-6">
-        {/* Scatter Chart */}
-        <div className="card p-6 flex flex-col flex-grow relative overflow-hidden min-h-[520px] lg:min-h-[620px]">
-          <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 card p-5 shrink-0">
+        <div>
+          <h2 className="text-lg font-bold text-slate-800">Filtro de Desempeño</h2>
+          <p className="text-sm text-slate-500 mt-1">Seleccioná un tema macro para ver métricas específicas de esa categoría</p>
+        </div>
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-bold rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-insta-pink/50 cursor-pointer sm:min-w-[200px]"
+        >
+          {categories.map((cat) => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-6 lg:h-full">
+        <div className="flex-grow flex flex-col gap-6">
+          {/* Scatter Chart */}
+          <div className="card p-6 flex flex-col flex-grow relative overflow-hidden min-h-[520px] lg:min-h-[620px]">
+            <div className="flex justify-between items-center mb-6">
             <div>
               <h2 className="text-xl font-bold mb-4">Views vs. Engagement Rate</h2>
               <p className="text-sm text-slate-500">Correlación del rendimiento mensual de Reels</p>
@@ -1175,8 +1279,8 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
                     return null;
                   }}
                 />
-                <Scatter name="Categorías" data={MONTHLY_CATEGORY_CHART_DATA}>
-                  {MONTHLY_CATEGORY_CHART_DATA.map((entry, index) => (
+                <Scatter name="Categorías" data={filteredCategoryChartData}>
+                  {filteredCategoryChartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Scatter>
@@ -1184,7 +1288,7 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
             </ResponsiveContainer>
           </div>
           <div className="flex flex-wrap gap-3 justify-center px-4 pb-2">
-            {MONTHLY_CATEGORY_CHART_DATA.map((category) => (
+            {filteredCategoryChartData.map((category) => (
               <div key={category.name} className="flex items-center gap-2">
                 <div 
                   className="w-3 h-3 rounded-full" 
@@ -1198,36 +1302,147 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
 
         {/* Comment Analysis Card */}
         <div className="card p-5 flex-shrink-0">
-          <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Análisis de Comentarios</h2>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-                <p className="text-xs font-bold text-blue-800 uppercase mb-2">Temas Destacados</p>
-                <div className="flex flex-wrap gap-2">
-                  {['ia', 'futuro', 'educacion', 'tecnologia'].map(tag => (
-                    <span key={tag} className="bg-white px-2 py-0.5 rounded text-xs border border-blue-200 text-blue-700 font-medium">
-                      {tag}
-                    </span>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" /> Análisis de Comentarios del Mes
+            </h2>
+          </div>
+          <div className="bg-white p-4 rounded-lg border border-slate-100 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total de comentarios ({selectedCategory})</p>
+                <p className="text-xl font-bold text-slate-900 mt-1">{filteredTotalsAndAverages.totals.totalComments.toLocaleString('es-AR')}</p>
+                <p className="text-[11px] text-slate-500 mt-1">Promedio por video: {Math.round(filteredTotalsAndAverages.averages.totalComments).toLocaleString('es-AR')}</p>
+              </div>
+              <div className="bg-indigo-50 rounded-lg p-3 border border-indigo-100">
+                <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">Índice comentarios / views</p>
+                <p className="text-xl font-bold text-indigo-700 mt-1">
+                  {filteredVideos.length > 0 ? (filteredTotalsAndAverages.totals.commentsViewsRatio * 100 / filteredVideos.length).toFixed(2) : '0.00'}
+                </p>
+                <p className="text-[11px] text-indigo-700/80 mt-1">Promedio índice: {(filteredTotalsAndAverages.averages.commentsViewsRatio * 100).toFixed(2)}</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 mb-4">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Proporción de comentarios largos y cortos</p>
+              <div className="w-full h-10">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={[
+                      {
+                        label: selectedCategory,
+                        Cortos: filteredTotalsAndAverages.totals.shortComments,
+                        Largos: filteredTotalsAndAverages.totals.longComments
+                      },
+                    ]}
+                    layout="vertical"
+                    barSize={10}
+                    margin={{ top: 8, right: 0, bottom: 8, left: 0 }}
+                  >
+                    <XAxis type="number" hide domain={[0, filteredTotalsAndAverages.totals.totalComments]} />
+                    <YAxis type="category" dataKey="label" hide />
+                    <Tooltip formatter={(value: number) => value.toLocaleString('es-AR')} />
+                    <Bar dataKey="Cortos" stackId="comments-length" fill="#38bdf8" radius={[999, 0, 0, 999]} />
+                    <Bar dataKey="Largos" stackId="comments-length" fill="#f97316" radius={[0, 999, 999, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-wrap gap-4 mt-2">
+                <p className="text-xs font-medium text-sky-600">Cortos: {Math.round(filteredTotalsAndAverages.totals.shortComments).toLocaleString('es-AR')}</p>
+                <p className="text-xs font-medium text-orange-600">Largos: {Math.round(filteredTotalsAndAverages.totals.longComments).toLocaleString('es-AR')}</p>
+                <p className="text-xs font-medium text-slate-600">
+                  {filteredTotalsAndAverages.totals.totalComments > 0 
+                    ? ((filteredTotalsAndAverages.totals.shortComments / filteredTotalsAndAverages.totals.totalComments) * 100).toFixed(1) 
+                    : '0.0'}% cortos
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-4">
+              <div className="bg-rose-50 rounded-lg p-3 border border-rose-100">
+                <p className="text-[10px] font-bold text-rose-700 uppercase tracking-wider mb-2">Tipos de comentarios</p>
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={filteredTotalsAndAverages.totals.commentTypes}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={112}
+                        innerRadius={58}
+                      >
+                        {filteredTotalsAndAverages.totals.commentTypes.map((entry: any) => (
+                          <Cell key={`comment-type-${entry.name}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => Math.round(value).toLocaleString('es-AR')} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-2 gap-y-1 mt-2">
+                  {filteredTotalsAndAverages.totals.commentTypes.map((entry: any) => (
+                    <p key={entry.name} className="text-[11px] text-slate-600 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></span>
+                      {entry.name}: {Math.round(entry.value).toLocaleString('es-AR')}
+                    </p>
                   ))}
                 </div>
               </div>
-              <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100">
-                <p className="text-xs font-bold text-emerald-800 uppercase mb-2">Sentimiento General</p>
-                <div className="flex items-center gap-2">
-                  <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-emerald-500 h-full" style={{ width: '79%' }}></div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_11rem] gap-3">
+                <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
+                  <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-2">Opiniones</p>
+                  <div className="h-44">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={filteredTotalsAndAverages.totals.opinionMix} margin={{ top: 8, right: 6, bottom: 18, left: 0 }}>
+                        <XAxis
+                          dataKey="name"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: '#64748b', fontSize: 11 }}
+                        />
+                        <YAxis hide domain={[0, 'dataMax + 5']} />
+                        <Tooltip formatter={(value: number) => Math.round(value).toLocaleString('es-AR')} />
+                        <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                          {filteredTotalsAndAverages.totals.opinionMix.map((entry: any) => (
+                            <Cell key={`opinion-${entry.name}`} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
-                  <span className="text-xs font-bold text-emerald-700 whitespace-nowrap">79% Positivo</span>
+                  <div className="flex flex-wrap gap-4 mt-2">
+                    {filteredTotalsAndAverages.totals.opinionMix.map((entry: any) => (
+                      <p key={entry.name} className="text-xs text-slate-600 font-medium flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></span>
+                        {entry.name}: {Math.round(entry.value).toLocaleString('es-AR')}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg p-3 border border-slate-200 text-slate-800 flex flex-col items-center justify-center">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2 text-center">Termómetro negativo</p>
+                  <div className="h-44 w-10 rounded-full bg-slate-100 border border-slate-200 relative overflow-hidden">
+                    <div
+                      className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-emerald-400 via-amber-400 to-rose-500"
+                      style={{ height: `${filteredVideos.length > 0 ? (filteredTotalsAndAverages.totals.aggressivenessIndex / filteredVideos.length).toFixed(1) : 0}%` }}
+                    ></div>
+                    <div
+                      className="absolute left-0 right-0 border-t border-slate-700/70"
+                      style={{ bottom: `${filteredTotalsAndAverages.averages.againstTone.aggressivenessIndex.toFixed(1)}%` }}
+                      title={`Promedio ${filteredTotalsAndAverages.averages.againstTone.aggressivenessIndex.toFixed(1)}%`}
+                    ></div>
+                  </div>
+                  <p className="text-xs font-bold mt-2 text-rose-600">{filteredVideos.length > 0 ? (filteredTotalsAndAverages.totals.aggressivenessIndex / filteredVideos.length).toFixed(1) : 0}% agresivas</p>
+                  <p className="text-[10px] text-slate-500 mt-1 text-center">Medio de selección: {filteredTotalsAndAverages.averages.againstTone.aggressivenessIndex.toFixed(1)}% agresivas</p>
                 </div>
               </div>
             </div>
-            <div className="p-3 bg-slate-50 rounded-lg">
-              <p className="text-xs font-bold text-slate-400 uppercase mb-1 tracking-tight">Resumen IA</p>
-              <p className="text-xs font-medium text-slate-500 italic leading-relaxed">
-                "La audiencia responde mejor a contenidos de futuro e IA aplicados al trabajo y la educacion. Hay muchar personas disconformes cuando se habla de política, aparecen algunos comentarios negativos. En general la audiencia se siente dolida por los temas a tratar y sienten que hace falta un cambio."
-              </p>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-4">
               {feedbackInsights.map((block) => (
                 <div
                   key={block.title}
@@ -1239,7 +1454,7 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
                         : 'bg-rose-50 border-rose-100'
                   }`}
                 >
-                  <p className={`text-xs font-bold uppercase mb-2 tracking-tight ${
+                  <p className={`text-[10px] font-bold uppercase mb-2 tracking-wider ${
                     block.toneClass === 'amber'
                       ? 'text-amber-700'
                       : block.toneClass === 'sky'
@@ -1254,8 +1469,8 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
                     ))}
                   </ul>
                   <div className="pt-2 border-t border-slate-200/70">
-                    <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Comentarios</p>
-                    <div className="space-y-1.5">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Comentarios</p>
+                    <div className="space-y-2">
                       {block.comments.map((comment) => (
                         <p key={comment} className="text-xs text-slate-600 italic leading-relaxed">"{comment}"</p>
                       ))}
@@ -1263,23 +1478,6 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
                   </div>
                 </div>
               ))}
-            </div>
-            <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-              <p className="text-xs font-bold text-blue-700 uppercase mb-2 tracking-tight">Comentarios más likeados</p>
-              <div className="space-y-2">
-                {topLikedComments.map((comment) => (
-                  <div key={`${comment.videoId}-${comment.user}-${comment.text}`} className="bg-white p-3 rounded-lg border border-rose-100">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-bold text-slate-800">@{comment.user}</p>
-                      <p className="text-xs font-bold text-rose-600 flex items-center gap-1 whitespace-nowrap">
-                        <Heart className="w-3 h-3" />
-                        {comment.likes.toLocaleString()} likes
-                      </p>
-                    </div>
-                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">{comment.text}</p>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         </div>
@@ -1291,18 +1489,18 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
         <div className="card p-5 flex-shrink-0">
           <h2 className="text-lg font-bold mb-4">Métricas Totales</h2>
           <div className="space-y-4">
-            <StatCard label="Videos" value={<AnimatedTotal value={VIDEOS.length} />} />
+            <StatCard label="Videos" value={<AnimatedTotal value={filteredVideos.length} />} />
             <StatCard label="Vistas" value={<AnimatedTotal value={totals.views} />} />
             <StatCard label="Likes" value={<AnimatedTotal value={totals.likes} />} />
             <StatCard label="Comentarios" value={<AnimatedTotal value={totals.comments} />} />
-            <StatCard label="Engagement Medio" value={<AnimatedTotal value={ACCOUNT_STATS.avg_engagement} decimals={1} suffix="%" />} />
+            <StatCard label="Engagement Medio" value={<AnimatedTotal value={filteredVideos.length > 0 ? filteredVideos.reduce((acc, v) => acc + parseFloat(v.engagement), 0) / filteredVideos.length : 0} decimals={1} suffix="%" />} />
           </div>
         </div>
 
         {/* Top Videos Grid */}
         <div className="card p-6 flex-grow flex flex-col min-h-[500px]">
           <h2 className="text-lg font-bold mb-4">Top Videos</h2>
-          <div className="grid grid-cols-1 gap-4 pr-2 min-h-0">
+          <div className="grid grid-cols-1 gap-4 pr-2 min-h-0 overflow-y-auto max-h-[500px]">
             {topVideos.map((v) => (
               <div key={v.id} className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                 <div className="flex items-start gap-3">
@@ -1328,6 +1526,7 @@ const SummaryTab = ({ onVideoSelect }: { onVideoSelect: (videoId: string) => voi
             ))}
           </div>
         </div>
+      </div>
       </div>
     </motion.div>
   );
@@ -1588,7 +1787,7 @@ export default function App() {
       {/* Navigation */}
       <nav className="bg-white border-b border-slate-200 flex px-6 flex-shrink-0 space-x-2">
         {[
-          { id: 'summary', label: 'Resumen General' },
+          { id: 'summary', label: 'Resumen Del Mes' },
           { id: 'videos', label: 'Estadísticas por Video' },
           { id: 'account', label: 'General de la Cuenta' }
         ].map((tab) => (
